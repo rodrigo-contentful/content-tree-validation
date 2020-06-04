@@ -1,0 +1,6 @@
+{
+  "id": "content-tree",
+  "name": "content-tree",
+  "srcdoc": "./build/index.html",
+  "sidebar": true
+}
