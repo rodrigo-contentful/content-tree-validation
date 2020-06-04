@@ -1,16 +1,17 @@
 import debounce from "debounce-fn"
-import React from "react"
+import React, { Component } from "react"
 import ReactDOM from "react-dom"
 import {
   SectionHeading,
   Paragraph,
   Icon,
   Note,
-  ValidationMessage
+  ValidationMessage,
+  Heading, Form, SelectField, Option, TextInput, FormLabel
 } from "@contentful/forma-36-react-components"
 import "@contentful/forma-36-react-components/dist/styles.css"
 import "@contentful/forma-36-fcss/dist/styles.css"
-import { init } from "contentful-ui-extensions-sdk"
+import { init, locations } from "contentful-ui-extensions-sdk"
 import "./index.css"
 
 const filterDuplicates = x => [...new Set(x)]
@@ -330,19 +331,16 @@ class App extends React.Component {
 
   checkFieldValue = entry => {
 
-    const re = /^([a-z]+\s)*[a-z]+$/;
+    // const re = /^([a-z]+\s)*[a-z]+$/;
+    // console.log(this.props.extension.parameters.installation.entityTitle)
+    const re = new RegExp(this.props.extension.parameters.installation.entityTitle);
     const isValid = re.test(String(entry).toLowerCase());
 
-//    console.log(isValid)
     var res = ""
     if (!isValid) {
-     res = <ValidationMessage>not well</ValidationMessage>
+     res = <ValidationMessage>Title not well formated</ValidationMessage>
     }
-  
-    return res
-    //return entry.fields[this.getDisplayFieldName(entry.sys.contentType.sys.id)][
-     // this.props.extension.locales.default
-    //]
+    return res    
   }
 
   renderSiblingReferences = () => {
@@ -418,8 +416,75 @@ class App extends React.Component {
 }
 
 init(extension => {
+   //ReactDOM.render(
+   //  <App extension={extension} />,
+   //  document.getElementById("root")
+   //)
+
+  const Component = extension.location.is(locations.LOCATION_APP_CONFIG) ? Config : App;
+
   ReactDOM.render(
-    <App extension={extension} />,
+    <Component extension={extension} />,
     document.getElementById("root")
   )
+  extension.window.startAutoResizer();
 })
+
+// todo: default regex "empty space" is beign escaped, find a way to not be interpreted.
+const DEFAULT_REGEX_SPACES = '^([a-z]+\s)*[a-z]+$';
+
+class Config extends Component {
+  constructor (props) {
+    super(props);
+    this.state = { parameters: {} };
+    this.app = this.props.extension.app;
+    this.app.onConfigure(() => this.onConfigure());
+  }
+  
+  async componentDidMount () {
+    const parameters = await this.app.getParameters();
+    this.setState(
+      { parameters: parameters || {} },
+      () => this.app.setReady()
+    );
+  }
+  
+  render () {
+    return (
+      <Form id="app-config">
+        <Heading>Name validator</Heading>
+        <Note noteType="primary" title="About the app">
+          Using  regular expression, the titles of an entity can be validated.
+        </Note>
+        <SelectField
+          required
+          name="entityTitle-selection"
+          id="entityTitle-selection"
+          labelText="Entity title validtor regex"
+          value={this.state.parameters.entityTitle || "^([a-z]+\s)*[a-z]+$"}
+          onChange={e => this.setState({ parameters: { entityTitle: e.target.value } })}
+        >
+          <Option value="^([a-z]+\-)*[a-z]+$">String with dash (some-some)</Option>
+          <Option value="^([a-z]+\s)*[a-z]+$">String with spaces (some some)</Option>
+          <Option value="^([a-z]+\/)*[a-z]+$">String with diagonal (some/some)</Option>
+        </SelectField>
+        <FormLabel htmlFor="name">Optional regex:</FormLabel>
+        <TextInput name="entityTitleInput"type="text" value="^([a-z]+\s)*[a-z]+$" onChange={e => this.setState({ parameters: { entityTitle: e.target.value } })} />
+      </Form>
+    );
+  }
+
+  async onConfigure () {
+    const { items: contentTypes } = await this.props.extension.space.getContentTypes();
+    const contentTypeIds = contentTypes.map(ct => ct.sys.id)
+
+    return {
+      parameters: this.state.parameters,
+      targetState: {
+        EditorInterface: contentTypeIds.reduce((acc, id) => {
+          return { ...acc, [id]: { sidebar: { position: 0 } } }
+        }, {})
+      }
+    };
+  }
+}
